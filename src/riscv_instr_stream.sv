@@ -301,6 +301,7 @@ class riscv_rand_instr_stream extends riscv_instr_stream;
     if (instr.has_fd) begin
       instr.fd = instr.gen_rand_fpr();
     end
+   `VECTOR_INCLUDE("riscv_instr_stream_inc_randomize_instr.sv")
   endfunction
 
 endclass

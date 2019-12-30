@@ -696,7 +696,7 @@ class riscv_instr_base extends uvm_object;
         default:
           `uvm_fatal(`gfn, $sformatf("Unsupported floating point format: %0s", format.name()))
       endcase
-    end else if((category != SYSTEM) && !(group inside {RV32A, RV64A})) begin
+    end else if((category != SYSTEM) && !(group inside {RV32A, RV64A, RV64V})) begin
       case(format)
         J_FORMAT, U_FORMAT : // instr rd,imm
           asm_str = $sformatf("%0s%0s, %0s", asm_str, rd.name(), get_imm());
@@ -1152,7 +1152,7 @@ class riscv_instr_base extends uvm_object;
       get_instr_name = {get_instr_name.substr(0, get_instr_name.len() - 3), ".d"};
       get_instr_name = aq ? {get_instr_name, ".aq"} :
                        rl ? {get_instr_name, ".rl"} : get_instr_name;
-    end else if (group inside {RV32F, RV64F, RV32D, RV64D}) begin
+    end else if (group inside {RV32F, RV64F, RV32D, RV64D, RV64V}) begin
       foreach(get_instr_name[i]) begin
         if (get_instr_name[i] == "_") begin
           get_instr_name[i] = ".";

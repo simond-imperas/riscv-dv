@@ -186,9 +186,11 @@ def check_num_operands(instr_str, num_operands, n):
 
 def is_csr(r):
     """ see if r is a csr """
-    # TODO add more as needed - could look in the enum privileged_reg_t  or the cores settings: implemented_csr[]
-    if r in ["mtvec","pmpaddr0","pmpcfg0","mstatus","mepc","mscratch","mcause",
-            "mtval","vl","vtype"]:
+    # TODO add more as needed - could look in the enum privileged_reg_t
+    #       or the cores settings: implemented_csr[]
+    if r in ["mtvec","stvec","satp","pmpaddr0","pmpcfg0","mstatus",
+            "mepc","mscratch","mcause","mtval",
+            "vl","vtype", "vxsat","vstart", "fcsr", "vxrm", "fcsr"]:
         return True
     else:
         return False
@@ -382,6 +384,8 @@ def process_ovpsim_sim_log(ovpsim_log, csv, full_trace = 1, stop = 0,
                     (instr_cnt, prev_trace.instr_str, line))
                 prev_trace.instr = "nop"
                 prev_trace.instr_str = "nop"
+            elif " INTERCEPT " in line:
+                logging.debug("Ignoring: [%d]  [[%s]]" % (instr_cnt, line))
             else:
                 logging.debug("<unknown> (%s) in line: [%s] %s " %
                         (item, str(instr_cnt), line))

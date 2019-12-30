@@ -673,6 +673,7 @@ class riscv_instr_gen_config extends uvm_object;
     if (no_wfi == 0) begin
       basic_instr = {basic_instr, WFI};
     end
+   `VECTOR_INCLUDE("riscv_instr_gen_conf_inc_build_instruction_list.sv")
   endfunction
 
   virtual function void get_excluded_instr(ref riscv_instr_name_t excluded[$]);

@@ -153,6 +153,9 @@ def collect_cov(log_dir, out, core, iss, testlist, batch_size, lsf_cmd, steps, \
           sim_cmd += (" --lsf_cmd \"%s\"" % lsf_cmd)
           sim_cmd_list.append(sim_cmd)
         trace_csv_opts = ""
+        mv_ucdb_cmd = ("mv riscv.ucdb riscv.%0d.ucdb" % (file_idx+1)) # sjd for incremental coverage
+        logging.info("mv_ucdb_cmd=(%s)" % mv_ucdb_cmd) # sjd
+        run_cmd(mv_ucdb_cmd) # sjd
     if lsf_cmd != "":
       run_parallel_cmd(sim_cmd_list, timeout)
     logging.info("Collecting functional coverage from %0d trace CSV...done" % len(csv_list))

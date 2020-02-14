@@ -124,9 +124,9 @@ pseudos={
     'snez'      :'sltu',
     'sltz'      :'slt',
     'sgtz'      :'slt',
-    'beqz'      :'beg',
-    'bnez'      :'bnez',
-    'bgez'      :'bgez',
+    'beqz'      :'beq',
+    'bnez'      :'bne',
+    'bgez'      :'bge',
     'bltz'      :'blt',
     'blez'      :'bge',
     'bgtz'      :'blt',
@@ -190,7 +190,7 @@ def is_csr(r):
     #       or the cores settings: implemented_csr[]
     if r in ["mtvec","stvec","satp","pmpaddr0","pmpcfg0","mstatus",
             "mepc","mscratch","mcause","mtval",
-            "vl","vtype", "vxsat","vstart", "fcsr", "vxrm", "fcsr"]:
+            "vl","vtype", "vxsat","vstart", "fcsr", "vxrm", "fcsr", "fflags"]:
         return True
     else:
         return False
@@ -203,7 +203,7 @@ def process_branch_offset (opn, operands, prev_trace):
     offset = hex(offset_dec)
     operands[opn] = offset
 
-def process_ovpsim_sim_log(ovpsim_log, csv, full_trace = 1, stop = 0,
+def process_ovpsim_sim_log(ovpsim_log, csv, platform_name, full_trace = 1, stop = 0,
     dont_truncate_after_first_ecall = 0,
     verbose2 = False):
   """Process OVPsim simulation log.
@@ -253,7 +253,7 @@ def process_ovpsim_sim_log(ovpsim_log, csv, full_trace = 1, stop = 0,
     logit = 0
     for line in f:
       # Extract instruction infromation
-      m = re.search(r"riscvOVPsim.*, 0x(?P<addr>.*?)(?P<section>\(.*\): ?)" \
+      m = re.search(r""+platform_name+".*, 0x(?P<addr>.*?)(?P<section>\(.*\): ?)" \
             "(?P<mode>[A-Za-z]*?)\s+(?P<bin>[a-f0-9]*?)\s+(?P<instr_str>.*?)$",
                 line)
       if m:
@@ -386,6 +386,19 @@ def process_ovpsim_sim_log(ovpsim_log, csv, full_trace = 1, stop = 0,
                 prev_trace.instr_str = "nop"
             elif " INTERCEPT " in line:
                 logging.debug("Ignoring: [%d]  [[%s]]" % (instr_cnt, line))
+            elif "SYSCALL(unhandled" in line:
+                 logging.debug("Ignoring: [%d]  [[%s]]" % (instr_cnt, line))
+            elif "Info Exiting" in line:
+                logging.debug("Ignoring: [%d]  [[%s]]" % (instr_cnt, line))
+            elif "finished:" in line:
+                logging.debug("Ignoring: [%d]  [[%s]]" % (instr_cnt, line))
+            elif "Open Virtual Platform" in line:
+                logging.debug("Ignoring: [%d]  [[%s]]" % (instr_cnt, line))
+            elif "verification and analysis" in line:
+                logging.debug("Ignoring: [%d]  [[%s]]" % (instr_cnt, line))
+            elif "Generate Signature file" in line:
+                logging.debug("Ending processing at: [%d]  [[%s]]" % (instr_cnt, line))
+                break
             else:
                 logging.debug("<unknown> (%s) in line: [%s] %s " %
                         (item, str(instr_cnt), line))
@@ -418,6 +431,8 @@ def main():
                                          dest="dont_truncate_after_first_ecall",
                                          action="store_true",
                     help="Dont truncate on first ecall")
+  parser.add_argument("--platform_name", type=str, default="riscvOVPsim",
+                      help="Platform name in OVPsim log")
   parser.set_defaults(full_trace=False)
   parser.set_defaults(verbose=False)
   parser.set_defaults(verbose2=False)
@@ -427,7 +442,7 @@ def main():
   setup_logging(args.verbose)
   logging.debug("Logging Debug set")
   # Process ovpsim log
-  process_ovpsim_sim_log(args.log, args.csv, args.full_trace,
+  process_ovpsim_sim_log(args.log, args.csv, args.platform_name, args.full_trace,
     args.stop_on_first_error, args.dont_truncate_after_first_ecall,
     args.verbose2)
 

@@ -36,7 +36,7 @@ def collect_cov(log_dir, out, core, iss, testlist, batch_size, lsf_cmd, steps, \
                 opts, timeout, simulator, simulator_yaml, custom_target, \
                 isa, target, stop_on_first_error,
                 dont_truncate_after_first_ecall,
-                vector_options, coverage_options):
+                vector_options, coverage_options, platform_name):
   """Collect functional coverage from the instruction trace
   Args:
     log_dir             : Trace log directory
@@ -57,6 +57,7 @@ def collect_cov(log_dir, out, core, iss, testlist, batch_size, lsf_cmd, steps, \
     stop_on_first_error : will end run on first error detected
     vector_options      : Enable Vectors and set vector config options
     coverage_options    : Set coverage config options
+    platform_name       : Platform name in OVPsim log
   """
   cwd = os.path.dirname(os.path.realpath(__file__))
   log_list = []
@@ -91,7 +92,7 @@ def collect_cov(log_dir, out, core, iss, testlist, batch_size, lsf_cmd, steps, \
         if iss == "spike":
           process_spike_sim_log(log, csv, 1)
         elif iss == "ovpsim":
-          process_ovpsim_sim_log(log, csv, 1, stop_on_first_error,
+          process_ovpsim_sim_log(log, csv, platform_name, 1, stop_on_first_error,
                 dont_truncate_after_first_ecall)
         else:
           logging.error("Full trace for %s is not supported yet" % iss)
@@ -153,9 +154,13 @@ def collect_cov(log_dir, out, core, iss, testlist, batch_size, lsf_cmd, steps, \
           sim_cmd += (" --lsf_cmd \"%s\"" % lsf_cmd)
           sim_cmd_list.append(sim_cmd)
         trace_csv_opts = ""
+        logging.info("sleep 30") # sjd
+        run_cmd("sleep 30") # sjd
         mv_ucdb_cmd = ("mv riscv.ucdb riscv.%0d.ucdb" % (file_idx+1)) # sjd for incremental coverage
         logging.info("mv_ucdb_cmd=(%s)" % mv_ucdb_cmd) # sjd
         run_cmd(mv_ucdb_cmd) # sjd
+        logging.info("sleep 30") # sjd
+        run_cmd("sleep 30") # sjd
     if lsf_cmd != "":
       run_parallel_cmd(sim_cmd_list, timeout)
     logging.info("Collecting functional coverage from %0d trace CSV...done" % len(csv_list))
@@ -284,6 +289,8 @@ def setup_parser():
                       help="Enable Vectors and set options")
   parser.add_argument("--coverage_options", type=str, default="",
                       help="Controlling coverage coverpoints")
+  parser.add_argument("--platform_name", type=str, default="riscvOVPsim",
+                      help="Platform name in OVPsim log")
   parser.set_defaults(verbose=False)
   parser.set_defaults(debug_mode=False)
   parser.set_defaults(stop_on_first_error=False)
@@ -352,7 +359,8 @@ def main():
                 args.isa, args.target, args.stop_on_first_error,
                 args.dont_truncate_after_first_ecall,
                 args.vector_options,
-                args.coverage_options)
+                args.coverage_options,
+                args.platform_name)
     logging.info("Coverage results are saved to %s" % output_dir)
 
 if __name__ == "__main__":

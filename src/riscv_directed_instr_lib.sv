@@ -90,6 +90,7 @@ endclass
 // addi rd1, offset, rd0
 // jalr rd, offset, rd1
 // For JAL, restore the stack before doing the jump
+
 class riscv_jump_instr extends riscv_directed_instr_stream;
 
   riscv_instr_base     jump;
@@ -528,4 +529,657 @@ class riscv_sw_interrupt_instr extends riscv_directed_instr_stream;
   endfunction
 
 endclass
+
+`ifdef ENABLE_VECTORS
+
+/* sjd ctrl_l 88
+sew: 8, 16, 32
+vlmul: 1, 2, 4, 8
+vl can be 0-512 (only 512 when sew=8 and vlmul=8)
+so buckets for vector integer instructions:
+{sew, vlmul, vl} with v0.t and without
+eg set vl to vlmax = -1
+    li x4, -1
+    vsetvli x3, x4, e16,m1
+*/
+class vsetvli_instr extends riscv_directed_instr_stream;
+
+  riscv_instr_base          li;
+  rand riscv_reg_t          li_rd;
+  rand int                  li_imm;
+//  rand int                  mixed_instr_cnt;
+
+  riscv_instr_base          vsetvli;
+  rand riscv_reg_t          vsetvli_rd;
+  rand riscv_vtype_vsew_t   vsetvli_vsew;
+  rand riscv_vtype_vmul_t   vsetvli_vmul;
+  rand riscv_vtype_vediv_t  vsetvli_vediv;
+
+  constraint instr_c {
+    !(li_rd inside {cfg.reserved_regs, ZERO});
+    li_imm inside {[0:15]}; // vl
+    !(vsetvli_rd inside {cfg.reserved_regs, ZERO});
+//    mixed_instr_cnt inside {[5:10]};
+  }
+
+  `uvm_object_utils(vsetvli_instr)
+
+  function new(string name = "");
+    super.new(name);
+    li       = riscv_instr_base::type_id::create("li");
+    vsetvli  = riscv_instr_base::type_id::create("vsetvli");
+  endfunction
+
+
+  function void post_randomize();
+//    riscv_instr_base instr[];
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(li,
+      instr_name    == LI;
+      rd            == li_rd;
+      imm           == li_imm;
+    )
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(vsetvli,
+      instr_name    == VSETVLI;
+      rd            == vsetvli_rd;
+      rs1           == li_rd;
+      vtype_vsew    == vsetvli_vsew;
+      vtype_vmul    == vsetvli_vmul;
+      vtype_vediv   == vsetvli_vediv;
+    )
+    //initialize_instr_list(mixed_instr_cnt);
+    //gen_instr(1'b1);
+    //mix_instr_stream(instr);
+
+    instr_list = {instr_list, li};
+    instr_list = {instr_list, vsetvli};
+  endfunction
+endclass
+
+class vadd_vi_instr_save extends riscv_directed_instr_stream;
+  mem_region_t    data_page[$];
+  string          data_name;
+  int             data_size;
+  int             offset;
+  
+  rand int        instr_cnt;
+  
+  riscv_pseudo_instr        i_la;
+  
+  riscv_instr_base          i_li;
+  rand riscv_reg_t          r_vl;
+  rand int                  v_vl;
+
+  riscv_instr_base          vsetvli;
+  rand riscv_reg_t          r_rd;
+  rand riscv_vtype_vsew_t   vsetvli_vsew;
+  rand riscv_vtype_vmul_t   vsetvli_vmul;
+
+  rand riscv_reg_t          r_data_addr;
+ 
+  riscv_instr_base          i_addi_0;
+  riscv_instr_base          i_vle_v_0;
+  riscv_instr_base          i_vle_v_1;
+  
+  rand riscv_vpr_t          vpr_0;
+  rand riscv_vpr_t          vpr_1;
+  
+  riscv_instr_base          i_li_1;
+  
+  riscv_instr_base          i_vadd_vi;
+  rand int                  v_imm;
+  
+  constraint instr_c {
+    !(r_vl inside {ZERO});
+    !(r_rd inside {ZERO});
+    !(r_data_addr inside {ZERO});
+    
+    r_vl != r_data_addr;
+    r_rd != r_data_addr;
+    r_vl != r_rd;
+    
+    // TODO should really be v_vl inside {[0:512]};
+    v_vl inside {0,5,8,13,16,20,32,47,64,83,115,128,156,211,256,333,416,501,512};
+    
+    vpr_0 != vpr_1;
+    
+    v_imm inside {[-16:16]};
+  }
+
+  `uvm_object_utils(vadd_vi_instr_save)
+
+  function new(string name = "");
+    super.new(name);
+    i_li       = riscv_instr_base::type_id::create("li");
+    i_la       = riscv_pseudo_instr::type_id::create("la");
+    vsetvli    = riscv_instr_base::type_id::create("vsetvli");
+    i_addi_0   = riscv_instr_base::type_id::create("addi");
+    i_vle_v_0  = riscv_instr_base::type_id::create("vle_v");
+    i_vle_v_1  = riscv_instr_base::type_id::create("vle_v");
+    i_li_1     = riscv_instr_base::type_id::create("li");
+    i_vadd_vi  = riscv_instr_base::type_id::create("vadd_vi");
+  endfunction
+  
+  function void pre_randomize();
+    data_page = cfg.mem_region;
+    data_name = data_page[0].name;
+    data_size = data_page[0].size_in_bytes;
+    offset = 8; // TODO should this be derived or it is width of gpr in bytes
+  endfunction
+  riscv_instr_base     jump[];
+
+  function void post_randomize();
+    int                     test_num;
+    riscv_instr_base        i_nop_start;
+    riscv_instr_base        i_nop_end;
+    
+    i_nop_start      = riscv_instr_base::type_id::create("nop");
+    i_nop_end        = riscv_instr_base::type_id::create("nop");
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(i_nop_start,
+      instr_name    == NOP;
+      rs1 == ZERO;
+      rs2 == ZERO;
+      rd  == ZERO;
+    )
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(i_nop_end,
+      instr_name    == NOP;
+      rs1 == ZERO;
+      rs2 == ZERO;
+      rd  == ZERO;
+    )
+    i_nop_start.comment     = $sformatf(" start of vector setup, test: %0d", test_num);
+    instr_list = {instr_list, i_nop_start};
+    
+    i_la.pseudo_instr_name  = LA;
+    i_la.imm_str            = $sformatf("%0s+%0d", data_name, test_num*offset);
+    i_la.rd                 = r_data_addr;
+    i_la.comment            = " address for test data +offset";
+    instr_list = {instr_list, i_la};
+    
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(i_li,
+      instr_name    == LI;
+      rd            == r_vl;
+      imm           == -1;
+    )
+    i_li.comment            = " Set VL to VLMAX to load values into registers";
+    instr_list = {instr_list, i_li};
+
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(vsetvli,
+      instr_name    == VSETVLI;
+      rd            == r_rd;
+      rs1           == r_vl;
+      vtype_vsew    == vsetvli_vsew;
+      vtype_vmul    == vsetvli_vmul;
+      vtype_vediv   == D1; // TODO randomize when vediv spec sorted
+    )
+    instr_list = {instr_list, vsetvli};
+    
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(i_addi_0,
+      instr_name    == ADDI;
+      rd            == r_data_addr;
+      rs1           == r_data_addr;
+      imm           == offset*8;
+    )
+    instr_list = {instr_list, i_addi_0};
+    
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(i_vle_v_0,
+      instr_name    == VLE_V;
+      vd            == vpr_0;
+      rs1           == r_data_addr;
+      vm            != ZERO;
+    )
+    i_vle_v_0.comment            = " Load value into vs2";
+    instr_list = {instr_list, i_vle_v_0};    
+    
+    instr_list = {instr_list, i_addi_0};
+    
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(i_vle_v_1,
+      instr_name    == VLE_V;
+      vd            == vpr_1;
+      rs1           == r_data_addr;
+      vm            != ZERO;
+    )
+    i_vle_v_1.comment            = " Load value into vd";
+    instr_list = {instr_list, i_vle_v_1};
+    
+    instr_list = {instr_list, i_addi_0};
+    
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(i_li_1,
+      instr_name    == LI;
+      rd            == r_vl;
+      imm           == v_vl;
+    )
+    i_li_1.comment            = $sformatf(" VL = %0d", v_vl);
+    instr_list = {instr_list, i_li_1};
+
+    instr_list = {instr_list, vsetvli};
+
+    // the instruction being tested!
+        `DV_CHECK_RANDOMIZE_WITH_FATAL(i_vadd_vi,
+      instr_name    == VADD_VI;
+      vd            == vpr_1;
+      vs2           == vpr_0;
+      imm           == v_imm;
+      vm           != ZERO;
+    )
+    i_vadd_vi.comment = 
+        $sformatf(" Test %0d: SEW = %0s, LMUL = %0s, Use Mask = 0, VL = %0d", 
+                            test_num, vsetvli_vsew, vsetvli_vmul, v_vl);
+    instr_list = {instr_list, i_vadd_vi};    
+    
+    i_nop_end.comment       = " end of vector test";
+    instr_list = {instr_list, i_nop_end};
+  endfunction
+endclass
+
+// this is first attempt at generating one instruction with legal vsetvli before
+// TODO - need to add a loop - so this is a stream rather than one test
+//      and need to not go past end of data
+// TODO - vm
+//      and need to not go past end of mask data
+// TODO - how to stop others being put on top - how to make atomic...
+// why do I keep getting: eg:
+//  Info 5366: 'riscvOVPsim/cpu', 0x0000000080000d10(_main+bd6): Machine 0213b357 vadd.vi v6,v1,7
+//  Warning (RISCV_IVI) CPU 'riscvOVPsim/cpu' 0x80000d10 0213b357 vadd.vi v6,v1,7: Illegal vector register index
+// why is imm -16 to 16?
+class vadd_vi_instr_save2 extends riscv_directed_instr_stream;
+  mem_region_t    data_page[$];
+  string          data_name;
+  int             data_size;
+  int             offset;
+  rand int unsigned       num_tests;
+  
+  riscv_instr_base       vinstr[];
+  riscv_pseudo_instr     pseudo[];
+  
+  rand riscv_reg_t          r_vl;
+  rand riscv_reg_t          r_rd;
+  rand riscv_reg_t          r_data_addr;
+  rand riscv_vpr_t          vpr_0;
+  rand riscv_vpr_t          vpr_1;
+  rand riscv_vtype_vsew_t   vsetvli_vsew;
+  rand riscv_vtype_vmul_t   vsetvli_vmul;
+  rand int                  v_vl;
+  rand int                  v_imm;
+  
+  constraint instr_c {
+    !(r_vl inside {ZERO});
+    !(r_rd inside {ZERO});
+    !(r_data_addr inside {ZERO});
+    
+    r_vl != r_data_addr;
+    r_rd != r_data_addr;
+    r_vl != r_rd;
+    
+    // TODO should really be v_vl inside {[0:512]};
+    v_vl inside {0,5,8,13,16,20,32,47,64,83,115,128,156,211,256,333,416,501,512};
+    
+    vpr_0 != vpr_1;
+    
+    v_imm inside {[-16:16]};
+    
+    num_tests inside {[1:2]};
+   }
+  `uvm_object_utils(vadd_vi_instr_save2)
+
+  function new(string name = "");
+    super.new(name);
+  endfunction
+  
+  function void pre_randomize();
+    data_page = cfg.mem_region;
+    data_name = data_page[0].name;
+    data_size = data_page[0].size_in_bytes;
+    offset = 8; // TODO should this be derived or it is width of vpr in bytes
+  endfunction
+
+  function void post_randomize();
+    int     test;
+    int     num_vinstr_per_test;
+    int     num_pseudo_per_test;
+    int     ii;
+    int     pp;
+    
+    num_vinstr_per_test   = 17;
+    num_pseudo_per_test   = 17;
+    ii  = 0;
+    pp = 0;
+    vinstr           = new[num_tests * num_vinstr_per_test];
+    pseudo           = new[num_tests * num_pseudo_per_test];
+    
+    for (test=0; test<num_tests; test++) begin
+        vinstr[ii] = riscv_instr_base::type_id::create("nop");
+        `DV_CHECK_RANDOMIZE_WITH_FATAL(vinstr[ii], 
+                             instr_name==NOP; rs1==ZERO; rs2==ZERO; rd==ZERO;)
+        vinstr[ii].comment = $sformatf(" start of vector setup, test: %0d", test);
+        instr_list = {instr_list, vinstr[ii++]};
+        
+        // la x2, test_1_data+0
+        pseudo[pp]                    = riscv_pseudo_instr::type_id::create("la");
+        pseudo[pp].pseudo_instr_name  = LA;
+        pseudo[pp].imm_str            = $sformatf("%0s+%0d", data_name, test*offset);
+        pseudo[pp].rd                 = r_data_addr;
+        pseudo[pp].comment            = " address for test data +offset";
+        instr_list = {instr_list, pseudo[pp++]};
+        
+        // li x4, -1
+        vinstr[ii] = riscv_instr_base::type_id::create("li");
+        `DV_CHECK_RANDOMIZE_WITH_FATAL(vinstr[ii],
+            instr_name==LI;
+            rd==r_vl;
+            imm==-1;)
+        vinstr[ii].comment = " Set VL to VLMAX to load values into registers";
+        instr_list = {instr_list, vinstr[ii++]};
+        
+        // vsetvli x3, x4, e16,m1
+        vinstr[ii] = riscv_instr_base::type_id::create("vsetvli");
+        `DV_CHECK_RANDOMIZE_WITH_FATAL(vinstr[ii],
+          instr_name    == VSETVLI;
+          rd            == r_rd;
+          rs1           == r_vl;
+          vtype_vsew    == vsetvli_vsew;
+          vtype_vmul    == vsetvli_vmul;
+          vtype_vediv   == D1;) // TODO randomize when vediv spec sorted
+        instr_list = {instr_list, vinstr[ii++]};
+        
+        // addi x2, x2, 64
+        vinstr[ii] = riscv_instr_base::type_id::create("addi");
+        `DV_CHECK_RANDOMIZE_WITH_FATAL(vinstr[ii],
+          instr_name    == ADDI;
+          rd            == r_data_addr;
+          rs1           == r_data_addr;
+          imm           == offset*8;)
+        instr_list = {instr_list, vinstr[ii++]};
+
+        // vle.v v15, (x2) 
+        vinstr[ii] = riscv_instr_base::type_id::create("vle_v");
+        `DV_CHECK_RANDOMIZE_WITH_FATAL(vinstr[ii],
+          instr_name    == VLE_V;
+          vd            == vpr_0;
+          rs1           == r_data_addr;
+          vm            != ZERO;)
+        vinstr[ii].comment = " Load value into vs2";
+        instr_list = {instr_list, vinstr[ii++]};    
+        
+        // addi x2, x2, 64
+        vinstr[ii] = riscv_instr_base::type_id::create("addi");
+        `DV_CHECK_RANDOMIZE_WITH_FATAL(vinstr[ii],
+          instr_name    == ADDI;
+          rd            == r_data_addr;
+          rs1           == r_data_addr;
+          imm           == offset*8;)
+        instr_list = {instr_list, vinstr[ii++]};
+
+        // vle.v v0, (x2)
+        vinstr[ii] = riscv_instr_base::type_id::create("vle_v");
+        `DV_CHECK_RANDOMIZE_WITH_FATAL(vinstr[ii],
+          instr_name    == VLE_V;
+          vd            == vpr_1;
+          rs1           == r_data_addr;
+          vm            != ZERO;)
+        vinstr[ii].comment = " Load value into vd";
+        instr_list = {instr_list, vinstr[ii++]};    
+        
+        // addi x2, x2, 64
+        vinstr[ii] = riscv_instr_base::type_id::create("addi");
+        `DV_CHECK_RANDOMIZE_WITH_FATAL(vinstr[ii],
+          instr_name    == ADDI;
+          rd            == r_data_addr;
+          rs1           == r_data_addr;
+          imm           == offset*8;)
+        instr_list = {instr_list, vinstr[ii++]};
+
+        // li  x4, 32
+        vinstr[ii] = riscv_instr_base::type_id::create("li");
+        `DV_CHECK_RANDOMIZE_WITH_FATAL(vinstr[ii],
+            instr_name==LI;
+            rd==r_vl;
+            imm==v_vl;)
+        vinstr[ii].comment = $sformatf(" VL = %0d", v_vl);
+        instr_list = {instr_list, vinstr[ii++]};
+        
+        // vsetvli x3, x4, e16,m1
+        vinstr[ii] = riscv_instr_base::type_id::create("vsetvli");
+        `DV_CHECK_RANDOMIZE_WITH_FATAL(vinstr[ii],
+          instr_name    == VSETVLI;
+          rd            == r_rd;
+          rs1           == r_vl;
+          vtype_vsew    == vsetvli_vsew;
+          vtype_vmul    == vsetvli_vmul;
+          vtype_vediv   == D1;) // TODO randomize when vediv spec sorted
+        instr_list = {instr_list, vinstr[ii++]};
+        
+        // the instruction being tested!
+        vinstr[ii] = riscv_instr_base::type_id::create("vadd_vi");
+        `DV_CHECK_RANDOMIZE_WITH_FATAL(vinstr[ii],
+          instr_name    == VADD_VI;
+          vd            == vpr_1;
+          vs2           == vpr_0;
+          imm           == v_imm;
+          vm           != ZERO;)
+        vinstr[ii].comment = 
+            $sformatf(" Test %0d: SEW = %0s, LMUL = %0s, Use Mask = 0, VL = %0d", 
+                                test, vsetvli_vsew, vsetvli_vmul, v_vl);
+        instr_list = {instr_list, vinstr[ii++]};    
+
+        // end
+        vinstr[ii]         = riscv_instr_base::type_id::create("nop");
+        `DV_CHECK_RANDOMIZE_WITH_FATAL(vinstr[ii], 
+                             instr_name==NOP; rs1==ZERO; rs2==ZERO; rd==ZERO;)
+        vinstr[ii].comment = " end of vector test";
+        instr_list = {instr_list, vinstr[ii++]};
+    end
+    
+  endfunction
+endclass
+
+// HERE ****************************************************************
+class VIA_VI_FORMAT_f;
+    randc riscv_reg_t          r_vl;
+    randc riscv_reg_t          r_rd;
+    randc riscv_reg_t          r_rs1;
+    randc riscv_reg_t          r_data_addr;
+    randc riscv_reg_t          r_mask_addr;
+    rand  riscv_vpr_t          vpr_0;
+    rand  riscv_vpr_t          vpr_1;
+    rand  riscv_vpr_t          vpr_2;
+    randc riscv_vtype_vsew_t   vsetvli_vsew;
+    rand  riscv_vtype_vmul_t   vsetvli_vmul;
+    randc int                  v_vl;
+    randc int                  v_imm;
+    rand  riscv_vins_vm_t      vm;
+    
+    constraint instr_c {
+        !(r_vl inside {ZERO});
+        !(r_rd inside {ZERO});
+        !(r_data_addr inside {ZERO});
+        !(r_mask_addr inside {ZERO});
+    
+        r_vl != r_data_addr;
+        r_rd != r_data_addr;
+        r_vl != r_rd;
+    
+        if (vm != V0_T) { // reversed?
+            vpr_0 != V0; 
+            vpr_1 != V0; 
+            vpr_2 != V0;
+        }
+
+        v_vl inside {0,5,8,13,16,20,32,47,64,83,115,128,156,211,256,333,416,501,512};
+
+        v_imm inside {[-16:15]};
+
+        vsetvli_vmul dist { M1 := 1,
+                            M2 := 4,
+                            M4 := 8,
+                            M8 := 16};
+        if (vsetvli_vmul == M2) {
+            vpr_0 inside {V0,V2,V4,V6,V8,V10,V12,V14,V16,V18,V20,V22,V24,V26,V28,V30};
+            vpr_1 inside {V0,V2,V4,V6,V8,V10,V12,V14,V16,V18,V20,V22,V24,V26,V28,V30};
+            vpr_2 inside {V0,V2,V4,V6,V8,V10,V12,V14,V16,V18,V20,V22,V24,V26,V28,V30};
+        } else if (vsetvli_vmul == M4) {
+            vpr_0 inside {V0,V4,V8,V12,V16,V20,V24,V28};
+            vpr_1 inside {V0,V4,V8,V12,V16,V20,V24,V28};
+            vpr_2 inside {V0,V4,V8,V12,V16,V20,V24,V28};
+        } else if (vsetvli_vmul == M8) {
+            vpr_0 inside {V0,V8,V16,V24};
+            vpr_1 inside {V0,V8,V16,V24};
+            vpr_2 inside {V0,V8,V16,V24};
+        }
+        solve vm before vpr_0;
+        solve vm before vpr_1;
+        solve vpr_0 before vsetvli_vmul;
+        solve vpr_1 before vsetvli_vmul;
+    }
+endclass
+
+class vadd_vi_instr extends riscv_directed_instr_stream;
+  mem_region_t    data_page[$];
+  string          data_name;
+  string          mask_name;
+  int             data_size;
+  int             offset;
+  int unsigned       num_tests = 1;
+  
+  riscv_instr_base       vinstr[];
+  riscv_pseudo_instr     pseudo[];
+  
+  `uvm_object_utils(vadd_vi_instr)
+
+  function new(string name = "");
+    super.new(name);
+  endfunction
+  
+  function void pre_randomize();
+    data_page = cfg.mem_region;
+    data_name = data_page[0].name;
+    mask_name = data_page[0].name;
+    data_size = data_page[0].size_in_bytes;
+    offset = 8; // TODO should this be derived or it is width of vpr in bytes
+  endfunction
+  
+  function riscv_instr_base gen_nop (string comment);
+    riscv_instr_base instr = riscv_instr_base::type_id::create("nop");
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(instr, instr_name==NOP; rs1==ZERO; rs2==ZERO; rd==ZERO;)
+    instr.comment = comment;
+    instr.atomic  = 'b1;
+    instr.has_label   = 'b0;
+    return instr;
+  endfunction
+  function riscv_pseudo_instr gen_pseudo_rd_imm (string asm, riscv_pseudo_instr_name_t pseudo_instr_name, riscv_reg_t rd, string imm_str, string comment);
+    riscv_pseudo_instr pseudo = riscv_pseudo_instr::type_id::create(asm);
+    pseudo.pseudo_instr_name = pseudo_instr_name;
+    pseudo.rd      = rd;
+    pseudo.imm_str = imm_str;
+    pseudo.comment = comment;
+    pseudo.atomic  = 'b1;
+    pseudo.has_label   = 'b0;
+    return pseudo;
+  endfunction
+  function riscv_instr_base gen_instr_vsetvli (string asm, riscv_instr_name_t instr_name, riscv_reg_t rd, rs1, riscv_vtype_vsew_t vsew, riscv_vtype_vmul_t vmul, riscv_vtype_vediv_t vediv);
+    riscv_instr_base instr = riscv_instr_base::type_id::create(asm);
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(instr,
+      instr_name    == VSETVLI;
+      vtype_vsew    == vsew;
+      vtype_vmul    == vmul;
+      vtype_vediv   == vediv;)
+      instr.atomic  = 'b1;
+      instr.has_label   = 'b0;
+      instr.rd            = rd;
+      instr.rs1           = rs1;
+    return instr;
+  endfunction
+  function riscv_instr_base gen_instr_addi (string asm, riscv_instr_name_t instr_name, riscv_reg_t rd, rs1, string imm_str);
+    riscv_instr_base instr = riscv_instr_base::type_id::create(asm);
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(instr,
+      instr_name    == ADDI;)
+      instr.atomic  = 'b1;
+      instr.has_label   = 'b0;
+      instr.rd            = rd;
+      instr.rs1           = rs1;
+      instr.imm_str           = imm_str;
+    return instr;
+  endfunction
+  function riscv_instr_base gen_instr_vle_v (string asm, riscv_instr_name_t instr_name, riscv_vpr_t vd, riscv_reg_t rs1);
+    riscv_instr_base instr = riscv_instr_base::type_id::create(asm);
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(instr,
+      instr_name    == VLE_V;
+      vm            != ZERO;)
+      instr.atomic  = 'b1;
+      instr.has_label   = 'b0;
+      instr.vd            = vd;
+      instr.rs1           = rs1;
+    return instr;
+  endfunction
+  function riscv_instr_base gen_vadd_vi (string asm, riscv_instr_name_t instr_name, riscv_vpr_t vd, vs2, string imm_str, riscv_vins_vm_t vm);
+    riscv_instr_base instr = riscv_instr_base::type_id::create(asm);
+    `DV_CHECK_RANDOMIZE_WITH_FATAL(instr,
+      instr_name    == VADD_VI;)
+      instr.atomic  = 'b1;
+      instr.has_label   = 'b0;
+      instr.vd            = vd;
+      instr.vs2           = vs2;
+      instr.vm           = vm;
+      instr.imm_str           = imm_str;
+    return instr;
+  endfunction
+
+  function void post_randomize();
+    int     test;
+    const int     NUM_VINSTR_PER_TEST = 17;
+    const int     NUM_PSEUDO_PER_TEST = 17;
+    int     ii = 0;
+    int     pp = 0;
+    VIA_VI_FORMAT_f ins;
+    ins = new;
+    `DV_CHECK_RANDOMIZE_FATAL(ins);
+    
+    vinstr           = new[num_tests * NUM_VINSTR_PER_TEST];
+    pseudo           = new[num_tests * NUM_PSEUDO_PER_TEST];
+    
+    vinstr[ii] = gen_nop ($sformatf(" start of vector setup, test: %0d", test));
+    instr_list = {instr_list, vinstr[ii++]};
+    if (ins.vm != V0_T) begin // reversed?
+        vinstr[ii] = gen_nop ($sformatf("   vm setup"));
+        instr_list = {instr_list, vinstr[ii++]};
+        pseudo[pp] = gen_pseudo_rd_imm ("li", LI, ins.r_vl, "-1", " Set VL to VLMAX to load values into registers");
+        instr_list = {instr_list, pseudo[pp++]};
+        vinstr[ii] = gen_instr_vsetvli ("vsetvli", VSETVLI, ins.r_rd, ins.r_vl, ins.vsetvli_vsew, ins.vsetvli_vmul, D1);
+        instr_list = {instr_list, vinstr[ii++]};
+        pseudo[pp] = gen_pseudo_rd_imm ("la", LA, ins.r_mask_addr, $sformatf("%0s", mask_name), "");
+        instr_list = {instr_list, pseudo[pp++]};
+        vinstr[ii] = gen_instr_vle_v ("vle_v", VLE_V, V0, ins.r_mask_addr);
+        instr_list = {instr_list, vinstr[ii++]};
+    end
+    pseudo[pp] = gen_pseudo_rd_imm ("la", LA, ins.r_data_addr, $sformatf("%0s+%0d", data_name, test*offset), " address for test data +offset");
+    instr_list = {instr_list, pseudo[pp++]};
+    pseudo[pp] = gen_pseudo_rd_imm ("li", LI, ins.r_vl, "-1", " Set VL to VLMAX to load values into registers");
+    instr_list = {instr_list, pseudo[pp++]};
+    vinstr[ii] = gen_instr_vsetvli ("vsetvli", VSETVLI, ins.r_rd, ins.r_vl, ins.vsetvli_vsew, ins.vsetvli_vmul, D1);  // TODO randomize when vediv spec sorted
+    instr_list = {instr_list, vinstr[ii++]};
+    vinstr[ii] = gen_instr_addi ("addi", ADDI, ins.r_data_addr, ins.r_data_addr,"0");
+    instr_list = {instr_list, vinstr[ii++]};
+    vinstr[ii] = gen_instr_vle_v ("vle_v", VLE_V, ins.vpr_0, ins.r_data_addr);
+    instr_list = {instr_list, vinstr[ii++]};
+    vinstr[ii] = gen_instr_addi ("addi", ADDI, ins.r_data_addr, ins.r_data_addr,"4");
+    instr_list = {instr_list, vinstr[ii++]};
+    vinstr[ii] = gen_instr_vle_v ("vle_v", VLE_V, ins.vpr_1, ins.r_data_addr);
+    instr_list = {instr_list, vinstr[ii++]};
+//    vinstr[ii] = gen_instr_addi ("addi", ADDI, ins.r_data_addr, ins.r_data_addr,"8"); // if 3 operands needed
+//    instr_list = {instr_list, vinstr[ii++]};
+//    vinstr[ii] = gen_instr_vle_v ("vle_v", VLE_V, ins.vpr_2, ins.r_data_addr);
+//    instr_list = {instr_list, vinstr[ii++]};
+    pseudo[pp] = gen_pseudo_rd_imm ("li", LI, ins.r_vl, $sformatf("%0d", ins.v_vl), " Set VL");
+    instr_list = {instr_list, pseudo[pp++]};
+    vinstr[ii] = gen_instr_vsetvli ("vsetvli", VSETVLI, ins.r_rd, ins.r_vl, ins.vsetvli_vsew, ins.vsetvli_vmul, D1);
+    instr_list = {instr_list, vinstr[ii++]};
+    
+    vinstr[ii] = gen_vadd_vi ("vadd_vi", VADD_VI, ins.vpr_1, ins.vpr_0,  $sformatf("%0d", ins.v_imm), ins.vm);
+    instr_list = {instr_list, vinstr[ii++]};
+
+    vinstr[ii] = gen_nop ($sformatf(" end, test: %0d", test));
+    instr_list = {instr_list, vinstr[ii++]};
+
+  endfunction
+endclass
+`endif
 

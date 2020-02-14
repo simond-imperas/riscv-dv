@@ -363,7 +363,7 @@ package riscv_instr_pkg;
     CIW_FORMAT // (last one)
   } riscv_instr_format_t;
 
-  typedef enum bit [5:0] {
+  typedef enum bit [6:0] {
     LOAD = 0,
     STORE,
     SHIFT,

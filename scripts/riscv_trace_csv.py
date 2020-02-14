@@ -507,6 +507,8 @@ def assign_operand(trace, operands, gpr, stop_on_first_error = 0):
     pass
   else:
     # TODO: Support other instructions
+    logging.info("ERROR: Unsupported instr : %s (%s)" %
+                  (trace.instr, trace.instr_str))
     logging.debug("Unsupported instr : %s (%s)" %
                   (trace.instr, trace.instr_str))
     if stop_on_first_error:

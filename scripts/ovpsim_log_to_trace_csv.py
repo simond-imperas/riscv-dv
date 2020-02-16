@@ -253,6 +253,7 @@ def process_ovpsim_sim_log(ovpsim_log, csv, platform_name, full_trace = 1, stop 
     logit = 0
     for line in f:
       # Extract instruction infromation
+      #logging.info("LINE: [%0s]" % line)
       m = re.search(r""+platform_name+".*, 0x(?P<addr>.*?)(?P<section>\(.*\): ?)" \
             "(?P<mode>[A-Za-z]*?)\s+(?P<bin>[a-f0-9]*?)\s+(?P<instr_str>.*?)$",
                 line)
@@ -396,11 +397,16 @@ def process_ovpsim_sim_log(ovpsim_log, csv, platform_name, full_trace = 1, stop 
                 logging.debug("Ignoring: [%d]  [[%s]]" % (instr_cnt, line))
             elif "verification and analysis" in line:
                 logging.debug("Ignoring: [%d]  [[%s]]" % (instr_cnt, line))
+            elif "STATISTICS" in line:
+                logging.debug("Ending processing at: [%d]  [[%s]]" % (instr_cnt, line))
+                break
             elif "Generate Signature file" in line:
                 logging.debug("Ending processing at: [%d]  [[%s]]" % (instr_cnt, line))
                 break
             else:
-                logging.debug("<unknown> (%s) in line: [%s] %s " %
+                logging.info("ERROR: <unknown> (%s) in line: [%s] %s " %
+                        (item, str(instr_cnt), line))
+                logging.debug("ERROR: <unknown> (%s) in line: [%s] %s " %
                         (item, str(instr_cnt), line))
                 if stop_on_first_error:
                     fatal ("")

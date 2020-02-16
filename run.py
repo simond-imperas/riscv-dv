@@ -377,7 +377,7 @@ def iss_sim(test_list, output_dir, iss_list, iss_yaml, isa, setting_dir, timeout
           logging.debug(cmd)
 
 
-def iss_cmp(test_list, iss, output_dir, isa, stop_on_first_error):
+def iss_cmp(test_list, iss, output_dir, isa, platform_name, stop_on_first_error):
   """Compare ISS simulation reult
 
   Args:
@@ -385,6 +385,7 @@ def iss_cmp(test_list, iss, output_dir, isa, stop_on_first_error):
     iss            : List of instruction set simulators
     output_dir     : Output directory of the ELF files
     isa            : ISA
+    platform_name  : the name of the platform in the OVPsim log, eg riscvOVPsim
     stop_on_first_error : will end run on first error detected
   """
   iss_list = iss.split(",")
@@ -406,7 +407,7 @@ def iss_cmp(test_list, iss, output_dir, isa, stop_on_first_error):
         if iss == "spike":
           process_spike_sim_log(log, csv)
         elif iss == "ovpsim":
-          process_ovpsim_sim_log(log, csv, 1, stop_on_first_error)
+          process_ovpsim_sim_log(log, csv, platform_name, 1, stop_on_first_error)
         elif iss == "sail":
           process_sail_sim_log(log, csv)
         elif iss == "whisper":
@@ -501,6 +502,8 @@ def setup_parser():
                            " job to small batches with this option")
   parser.add_argument("--stop_on_first_error", dest="stop_on_first_error", action="store_true",
                       help="Stop on detecting first error")
+  parser.add_argument("--platform_name", type=str, default="riscvOVPsim",
+                      help="Name of OVPsim platform eg riscvOVPsim")
   parser.set_defaults(co=False)
   parser.set_defaults(so=False)
   parser.set_defaults(verbose=False)
@@ -607,7 +610,7 @@ def main():
 
     # Compare ISS simulation result
     if args.steps == "all" or re.match(".*iss_cmp.*", args.steps):
-      iss_cmp(matched_list, args.iss, output_dir, args.isa, args.stop_on_first_error)
+      iss_cmp(matched_list, args.iss, output_dir, args.isa, args.platform_name, args.stop_on_first_error)
 
 if __name__ == "__main__":
   main()

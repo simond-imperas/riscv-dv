@@ -250,6 +250,7 @@ def gen(test_list, csr_file, end_signature_addr, isa, simulator,
             else:
               logging.info("Running %s, batch %0d/%0d, test_cnt:%0d" %
                            (test['test'], i+1, batch_cnt, test_cnt))
+              # logging.info("Command: %0s" % cmd)
               output = run_cmd(cmd, timeout_s)
     if sim_seed:
       with open(('%s/seed.yaml' % os.path.abspath(output_dir)) , 'w') as outfile:

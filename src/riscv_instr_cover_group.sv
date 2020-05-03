@@ -879,6 +879,12 @@ class riscv_instr_cover_group;
         $display("coverage option: +cov_category=%0s", cov_category_str);
         // used to further subset coverage (used by vectors)
     end
+	
+    if ($test$plusargs("cov_ins=")) begin
+        string cov_ins_str;
+        void'($value$plusargs("cov_ins=%0s", cov_ins_str));
+        $display("coverage option: +cov_ins=%0s", cov_ins_str);
+    end
 
     // show coverage defines
     // they will be set on command line and used before here...

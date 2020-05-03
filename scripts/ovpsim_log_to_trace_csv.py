@@ -246,7 +246,7 @@ def process_ovpsim_sim_log(ovpsim_log, csv, platform_name, full_trace = 1, stop 
   csr["vtype"] = 0
 
   instr_cnt = 0
-  with open(ovpsim_log, "r") as f, open(csv, "w") as csv_fd:
+  with open(ovpsim_log, "r") as f, open(csv, "w") as csv_fd, open(csv+".covdat", "w") as covdat:
     trace_csv = RiscvInstructionTraceCsv(csv_fd)
     trace_csv.start_new_trace()
     prev_trace = 0
@@ -264,6 +264,7 @@ def process_ovpsim_sim_log(ovpsim_log, csv, platform_name, full_trace = 1, stop 
             update_operands_values(prev_trace, gpr)
             instr_cnt += 1
             trace_csv.write_trace_entry(prev_trace)
+            write_OVPsim_coverage_data(covdat, prev_trace)
             if verbose2:
                 logging.debug("prev_trace:: "+str(prev_trace.__dict__))
                 logging.debug("csr       :: "+str(csr))
@@ -403,6 +404,9 @@ def process_ovpsim_sim_log(ovpsim_log, csv, platform_name, full_trace = 1, stop 
             elif "Generate Signature file" in line:
                 logging.debug("Ending processing at: [%d]  [[%s]]" % (instr_cnt, line))
                 break
+            elif "EXITCONTROL_EXIT" in line:
+                logging.debug("Ending processing at: [%d]  [[%s]]" % (instr_cnt, line))
+                break
             else:
                 logging.info("ERROR: <unknown> (%s) in line: [%s] %s " %
                         (item, str(instr_cnt), line))
@@ -416,6 +420,26 @@ def process_ovpsim_sim_log(ovpsim_log, csv, platform_name, full_trace = 1, stop 
     sys.exit(-1)
   logging.info("CSV saved to : %s" % csv)
 
+covdat_line = 0
+def write_OVPsim_coverage_data(covdat, t):
+    global covdat_line
+    # logging.info("write_OVPsim_coverage_data(%0s)" % t.instr_str)
+    if 1 or t.instr in ["add"] and (len(t.instr) == len ("add")):
+        s  = "%0d: {" % covdat_line
+        s += "%0s: %0s"   % ("asm",     t.instr)
+        s += ", %0s: %0s" % ("rd_gpr",  t.rd)      if t.rd  else ""
+        s += ", %0s: 0x%0s" % ("rd_val",  t.rd_val)  if t.rd  else ""
+        s += ", %0s: %0s" % ("rs1_gpr", t.rs1)     if t.rs1 else ""
+        s += ", %0s: 0x%0s" % ("rs1_val", t.rs1_val) if t.rs1 else ""
+        s += ", %0s: %0s" % ("rs2_gpr", t.rs2)     if t.rs2 else ""
+        s += ", %0s: 0x%0s" % ("rs2_val", t.rs2_val) if t.rs2 else ""
+        s += ", %0s: 0x%0s" % ("imm", t.imm)     if t.imm else ""
+        s += ", %0s: %0s" % ("csr", t.csr)     if t.csr else ""
+        s += " }"
+        s += " #  %0s" % (t.instr_str)
+        covdat.write(s+"\n")
+        covdat_line += 1
+	
 def main():
   """ if used standalone set up for testing """
   instr_trace = []

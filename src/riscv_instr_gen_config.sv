@@ -82,7 +82,7 @@ class riscv_instr_gen_config extends uvm_object;
   // Below checking can be made optional as the ISS implementation could be different with the
   // processor.
   bit                    check_misa_init_val = 1'b0;
-  bit                    check_xstatus = 1'b1;
+  bit                    check_xstatus = 1'b0; // sjd changed default
 
   // Virtual address translation is on for this test
   rand bit               virtual_addr_translation_on;

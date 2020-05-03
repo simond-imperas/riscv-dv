@@ -20,12 +20,12 @@ class riscv_instr_cov_item extends riscv_instr_base;
     NORMAL_VAL, MIN_VAL, MAX_VAL, ZERO_VAL
   } special_val_e;
 
-  rand bit [XLEN-1:0]   rs1_value;
-  rand bit [XLEN-1:0]   rs2_value;
-  rand bit [XLEN-1:0]   rd_value;
-  rand bit [XLEN-1:0]   fs1_value;
-  rand bit [XLEN-1:0]   fs2_value;
-  rand bit [XLEN-1:0]   fd_value;
+  bit [XLEN-1:0]   rs1_value; // was rand sjd
+  bit [XLEN-1:0]   rs2_value; // was rand sjd
+  bit [XLEN-1:0]   rd_value; // was rand sjd
+  bit [XLEN-1:0]   fs1_value; // was rand sjd
+  bit [XLEN-1:0]   fs2_value; // was rand sjd
+  bit [XLEN-1:0]   fd_value; // was rand sjd
   bit [31:0]            binary;
   bit [XLEN-1:0]        pc;
   bit [XLEN-1:0]        mem_addr;

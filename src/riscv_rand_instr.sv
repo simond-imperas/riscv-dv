@@ -134,7 +134,7 @@ class riscv_rand_instr extends riscv_instr_base;
       fs1.rand_mode(0);
       fs2.rand_mode(0);
       fs3.rand_mode(0);
-      fd.rand_mode(0);
+      // fd.rand_mode(0); sjd
     end
   endfunction
 

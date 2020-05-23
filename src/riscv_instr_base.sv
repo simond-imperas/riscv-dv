@@ -28,7 +28,8 @@ class riscv_instr_base extends uvm_object;
   rand riscv_fpr_t              fs1;
   rand riscv_fpr_t              fs2;
   rand riscv_fpr_t              fs3;
-  rand riscv_fpr_t              fd;
+  // rand riscv_fpr_t              fd;
+  riscv_fpr_t              fd; // sjd lose rand
   rand bit [31:0]               imm;
   rand imm_t                    imm_type;
   rand bit [4:0]                imm_len;

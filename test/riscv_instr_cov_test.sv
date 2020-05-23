@@ -3,6 +3,7 @@ class riscv_instr_cov_test extends uvm_test;
 
   typedef uvm_enum_wrapper#(riscv_instr_name_t) instr_enum;
   typedef uvm_enum_wrapper#(riscv_reg_t) gpr_enum;
+  typedef uvm_enum_wrapper#(riscv_fpr_t) fpr_enum;
   typedef uvm_enum_wrapper#(privileged_reg_t) preg_enum;
   `VECTOR_INCLUDE("riscv_instr_cov_test_inc_typedef.sv")
 
@@ -143,13 +144,14 @@ class riscv_instr_cov_test extends uvm_test;
     end
     unexpected_illegal_instr_cnt++;
     fatal($sformatf(
-        "FATAL: sample(%0s) is ILLEGAL instruction (for the included ISAs)",
+        "FATAL: sample(%0s) is NOT INCLUDED instruction (for the included ISAs)",
             trace["instr"]));
     return 1'b0;
   endfunction
 
   virtual function void assign_trace_info_to_instr(riscv_instr_cov_item instr);
     riscv_reg_t gpr;
+    riscv_fpr_t fpr;
    `VECTOR_INCLUDE("riscv_instr_cov_test_inc_assign_trace_info_to_instr_declares.sv")
     privileged_reg_t preg;
     get_val(trace["addr"], instr.pc);
@@ -158,6 +160,25 @@ class riscv_instr_cov_test extends uvm_test;
     if (instr.instr_name inside {ECALL, EBREAK, FENCE, FENCE_I, NOP,
                                  C_NOP, WFI, MRET, C_EBREAK}) begin
       return;
+    end
+
+    if (instr.has_fd) begin
+      if (get_fpr_from_abi(trace["fd"], fpr)) begin
+        instr.fd = fpr;
+        get_val(trace["fd_val"], instr.fd_value);
+      end else begin
+        `uvm_error(`gfn, $sformatf("Unrecognized fd: [%0s] (%0s)",
+                                   trace["fd"], trace["csv_entry"]))
+      end
+    end
+    if (instr.has_fs1) begin
+      if (get_fpr_from_abi(trace["fs1"], fpr)) begin
+        instr.fs1 = fpr;
+        get_val(trace["fs1_val"], instr.fs1_value);
+      end else begin
+        `uvm_error(`gfn, $sformatf("Unrecognized fs1: [%0s] (%0s)",
+                                   trace["fs1"], trace["csv_entry"]))
+      end
     end
     if (instr.has_rs2) begin
       if (get_gpr(trace["rs2"], gpr)) begin
@@ -222,6 +243,55 @@ class riscv_instr_cov_test extends uvm_test;
   function bit get_gpr(input string str, output riscv_reg_t gpr);
     str = str.toupper();
     if (gpr_enum::from_name(str, gpr)) begin
+      return 1'b1;
+    end else begin
+      return 1'b0;
+    end
+  endfunction
+
+  function bit get_fpr_from_abi(input string str_abi, output riscv_fpr_t fpr);
+    string str;
+    str_abi = str_abi.tolower();
+    case (str_abi.tolower())
+	  "ft11": str="f31";
+	  "ft10": str="f30";
+	  "ft9": str="f29";
+	  "ft8": str="f28";
+	  "fs11": str="f27";
+	  "fs10": str="f26";
+	  "fs9": str="f25";
+	  "fs8": str="f24";
+	  "fs7": str="f23";
+	  "fs6": str="f22";
+	  "fs5": str="f21";
+	  "fs4": str="f20";
+	  "fs3": str="f19";
+	  "fs2": str="f18";
+	  "fa7": str="f17";
+	  "fa6": str="f16";
+	  "fa5": str="f15";
+	  "fa4": str="f14";
+	  "fa3": str="f13";
+	  "fa2": str="f12";
+	  "fa1": str="f11";
+	  "fa0": str="f10";
+	  "fs1": str="f9";
+	  "fs0": str="f8";
+	  "ft7": str="f7";
+	  "ft6": str="f6";
+	  "ft5": str="f5";
+	  "ft4": str="f4";
+	  "ft3": str="f3";
+	  "ft2": str="f2";
+	  "ft1": str="f1";
+	  "ft0": str="f0";
+	  default: `uvm_fatal(`gfn, $sformatf("Unrecognized fd abi: [%0s]",
+              str_abi))
+    endcase
+    str = str.toupper();
+   // `uvm_fatal(`gfn, $sformatf("check fd abi: [%0s]  str(%0s)",
+   //               str_abi, str));
+    if (fpr_enum::from_name(str, fpr)) begin
       return 1'b1;
     end else begin
       return 1'b0;

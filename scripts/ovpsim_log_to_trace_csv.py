@@ -435,6 +435,7 @@ def write_OVPsim_coverage_data(covdat, t):
         s += ", %0s: 0x%0s" % ("rs2_val", t.rs2_val) if t.rs2 else ""
         s += ", %0s: 0x%0s" % ("imm", t.imm)     if t.imm else ""
         s += ", %0s: %0s" % ("csr", t.csr)     if t.csr else ""
+        s += ", %0s: 0x%0s" % ("addr", t.addr)     if t.addr else ""
         s += " }"
         s += " #  %0s" % (t.instr_str)
         covdat.write(s+"\n")

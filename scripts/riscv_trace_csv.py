@@ -499,10 +499,10 @@ def assign_operand(trace, operands, gpr, stop_on_first_error = 0):
     trace.rd_val = '0'
     if "(" in operands[0]: # convert "1(tp)" into imm=1, and rs1=tp
         op0s = operands[0].split("(")
-        trace.imm = op0s[0]
+        trace.imm = get_imm_hex_val(op0s[0])
         trace.rs1 = op0s[1].split(")")[0]
     else: 
-        trace.imm = 0
+        trace.imm = '0'
         trace.rs1 = operands[0]
     if trace.rs1 in gpr:
         trace.rs1_val = gpr[trace.rs1]

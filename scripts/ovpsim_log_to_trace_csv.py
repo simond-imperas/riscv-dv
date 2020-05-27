@@ -252,7 +252,7 @@ def process_ovpsim_sim_log(ovpsim_log, csv, platform_name, full_trace = 1, stop 
     prev_trace = 0
     logit = 0
     for line in f:
-      # Extract instruction infromation
+      # Extract instruction information
       #logging.info("LINE: [%0s]" % line)
       m = re.search(r""+platform_name+".*, 0x(?P<addr>.*?)(?P<section>\(.*\): ?)" \
             "(?P<mode>[A-Za-z]*?)\s+(?P<bin>[a-f0-9]*?)\s+(?P<instr_str>.*?)$",
@@ -360,6 +360,9 @@ def process_ovpsim_sim_log(ovpsim_log, csv, platform_name, full_trace = 1, stop 
                 # backwards compatible
                 prev_trace.rd_val       = n.group("val")
                 gpr[prev_trace.rd]      = prev_trace.rd_val
+                # TODO - there is a bug here: if we have an instructon like andi t5,t5,3
+                #   then we dont save the rs1 previous value anywhere...
+                #   so if we do cover of rs1 value it is already updated to the new value...
             if 0:
               print (
                 "write entry [[%d]]: rd[%s] val[%s] instr(%s) bin(%s) addr(%s)"

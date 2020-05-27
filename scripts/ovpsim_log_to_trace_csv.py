@@ -130,7 +130,7 @@ pseudos={
     'bltz'      :'blt',
     'blez'      :'bge',
     'bgtz'      :'blt',
-    'csrr'      :'csrrw',
+    'csrr'      :'csrrs',
     'csrw'      :'csrrw',
     'csrs'      :'csrrs',
     'csrc'      :'csrrc',

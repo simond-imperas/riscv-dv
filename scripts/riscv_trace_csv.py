@@ -469,7 +469,7 @@ def assign_operand(trace, operands, gpr, stop_on_first_error = 0):
     trace.rs2_val = gpr[trace.rs2]
     trace.imm = get_imm_hex_val(operands[1])
   elif trace.instr in ['csrr']:
-    trace.instr = 'csrrw'
+    trace.instr = 'csrrs'
     trace.rd = operands[0]
     trace.rd_val = gpr[trace.rd]
     trace.csr = operands[1]

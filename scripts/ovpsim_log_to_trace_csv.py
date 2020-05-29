@@ -64,6 +64,9 @@ FREGS = ["ft0","ft1","ft2","ft3","ft4","ft5","ft6","ft7","fs0","fs1","fa0",
         "fa1","fa2","fa3","fa4","fa5","fa6","fa7","fs2","fs3","fs4","fs5",
         "fs6","fs7","fs8","fs9","fs10","fs11","ft8","ft9","ft10","ft11"]
 
+def tohex(val, nbits):
+  return hex((val + (1 << nbits)) % (1 << nbits))
+
 def process_jal(trace, operands, gpr):
     """ correctly process jal """
     # TODO need to merge with jalr
@@ -71,9 +74,31 @@ def process_jal(trace, operands, gpr):
     if len(operands) == 2:
         trace.rd = operands[0]
         trace.rd_val = gpr[trace.rd]
-        trace.imm = get_imm_hex_val("0x" + operands[1])
+        #trace.imm = get_imm_hex_val("0x" + operands[1]) # xxx
+        pc = trace.addr
+        addr = operands[1]
+        offset_dec = int(addr, 16) - int(pc, 16)
+        offset = tohex(offset_dec, 32)
+        trace.imm = offset[2:]
+        # print("JAL: pc(%0s) addr(%0s) offset_dec(%0s) offset(%0s) imm(%0s)" % (pc, addr, offset_dec, offset, trace.imm))
     else:
         fatal("process_jal(%s) wrong num operands (%d)" %
+            (trace.instr, len(operands)))
+
+def process_j(trace, operands, gpr):
+    """ correctly process j """
+    ## j addr -> jal x0,offset
+    if len(operands) == 1:
+        trace.instr = 'jal'
+        trace.rd = "zero"
+        trace.rd_val = '0'
+        pc = trace.addr
+        addr = operands[0]
+        offset_dec = int(addr, 16) - int(pc, 16)
+        offset = hex(offset_dec)
+        trace.imm = offset[2:]
+    else:
+        fatal("process_j(%s) wrong num operands (%d)" %
             (trace.instr, len(operands)))
 
 def process_jalr(trace, operands, gpr):
@@ -311,6 +336,8 @@ def process_ovpsim_sim_log(ovpsim_log, csv, platform_name, full_trace = 1, stop 
                   process_jalr(prev_trace, operands, gpr)
                 elif (prev_trace.instr in ['jal','c.jal']):
                   process_jal(prev_trace, operands, gpr)
+                elif (prev_trace.instr in ['j']):
+                  process_j(prev_trace, operands, gpr)
                 else:
                   if is_an_extension_instruction(prev_trace.instr):
                     assign_operand_vector(prev_trace, operands, gpr,

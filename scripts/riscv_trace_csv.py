@@ -493,6 +493,13 @@ def assign_operand(trace, operands, gpr, stop_on_first_error = 0):
     trace.rd = 'zero'
     trace.rd_val = '0'
     trace.imm = get_imm_hex_val(operands[0])
+  elif trace.instr in ['ret']:  # jalr zero,0(ra)
+    trace.instr = 'jalr'
+    trace.rd = 'zero'
+    trace.rd_val = '0'
+    trace.rs1 = 'ra'
+    trace.rd_val = gpr[trace.rs1]
+    trace.imm = get_imm_hex_val('0')
   elif trace.instr in ['jr']:
     trace.instr = 'jalr'
     trace.rd = 'zero'

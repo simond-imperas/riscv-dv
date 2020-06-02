@@ -164,6 +164,7 @@ pseudos={
     'csrci'     :'csrrci',
     'j'         :'jal',
     'jr'        :'jal',
+    'ret'       :'jalr',
     }
 
 def check_conversion(entry):
@@ -357,9 +358,9 @@ def process_ovpsim_sim_log(ovpsim_log, csv, platform_name, full_trace = 1, stop 
                     assign_operand(prev_trace, operands, gpr,
                         stop_on_first_error)
             else:
-                # logging.debug("no operand for [%s] in [%s]" % (trace_instr,
-                #   trace_instr_str))
-                pass
+                #logging.debug("no operand for [%s] in [%s]" % (prev_trace.instr,prev_trace.instr_str))
+                if prev_trace.instr in "ret":
+                    assign_operand(prev_trace, operands, gpr, stop_on_first_error)
       else:
         # its a csr, gpr new value or report
         if 0: logging.debug ("reg change... [%s]" % (line.strip()))

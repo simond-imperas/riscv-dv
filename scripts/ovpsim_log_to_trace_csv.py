@@ -135,7 +135,14 @@ def process_jalr(trace, operands, gpr):
 def process_if_compressed(prev_trace):
   """ convert naming for compressed instructions """
   if len(prev_trace.binary) == 4: # compressed are always 4 hex digits
-    prev_trace.instr = "c."+prev_trace.instr
+    new_instr = "c."+prev_trace.instr
+    if prev_trace.instr == "sw":
+        if (int(prev_trace.binary,16) & 3) == 2:
+            new_instr = "c.swsp"
+    elif prev_trace.instr == "lw":
+        if (int(prev_trace.binary,16) & 3) == 2:
+            new_instr = "c.lwsp"
+    prev_trace.instr = new_instr
     # logging.debug("process_if_compressed(%s, %s)" %
     #   (prev_trace.instr, prev_trace.binary))
 
@@ -165,6 +172,8 @@ pseudos={
     'j'         :'jal',
     'jr'        :'jal',
     'ret'       :'jalr',
+    'sw'        :'swsp', # not a pseudo - but convert from objdump shorthand
+    'lw'        :'lwsp', # not a pseudo - but convert from objdump shorthand
     }
 
 def check_conversion(entry):

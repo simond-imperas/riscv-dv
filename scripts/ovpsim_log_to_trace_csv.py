@@ -100,6 +100,19 @@ def process_j(trace, operands, gpr):
     else:
         fatal("process_j(%s) wrong num operands (%d)" %
             (trace.instr, len(operands)))
+            
+def process_c_j(trace, operands, gpr):
+    """ correctly process c.j """
+    ## c.j addr -> c.j offset
+    if len(operands) == 1:
+        pc = trace.addr
+        addr = operands[0]
+        offset_dec = int(addr, 16) - int(pc, 16)
+        offset = hex(offset_dec)
+        trace.imm = offset[2:]
+    else:
+        fatal("process_c_j(%s) wrong num operands (%d)" %
+            (trace.instr, len(operands)))
 
 def process_jalr(trace, operands, gpr):
   """ process jalr """
@@ -348,6 +361,8 @@ def process_ovpsim_sim_log(ovpsim_log, csv, platform_name, full_trace = 1, stop 
                   process_jal(prev_trace, operands, gpr)
                 elif (prev_trace.instr in ['j']):
                   process_j(prev_trace, operands, gpr)
+                elif (prev_trace.instr in ['c.j']):
+                  process_c_j(prev_trace, operands, gpr)
                 else:
                   if is_an_extension_instruction(prev_trace.instr):
                     assign_operand_vector(prev_trace, operands, gpr,

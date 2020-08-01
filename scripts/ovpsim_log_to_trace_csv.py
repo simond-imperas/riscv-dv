@@ -155,9 +155,9 @@ def process_if_compressed(prev_trace):
     elif prev_trace.instr == "lw":
         if (int(prev_trace.binary,16) & 3) == 2:
             new_instr = "c.lwsp"
-    elif prev_trace.instr == "ld":
+    elif prev_trace.instr == "sw":
         if (int(prev_trace.binary,16) & 3) == 2:
-            new_instr = "c.ldsp"
+            new_instr = "c.swsp"
     elif prev_trace.instr == "ld":
         if (int(prev_trace.binary,16) & 3) == 2:
             new_instr = "c.ldsp"
